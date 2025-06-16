@@ -1,33 +1,55 @@
 <?php
 
-namespace app\Http\Controllers;
+namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Stripe\Stripe;
+use Stripe\Customer;
 use Stripe\PaymentIntent;
+
 class StripePaymentController extends Controller
 {
     public function createPaymentIntent(Request $request)
     {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email',
+            'amount' => 'required|numeric|min:1'
+        ]);
+
         Stripe::setApiKey(config('services.stripe.secret'));
 
         try {
+            $customer = Customer::create([
+                'name' => $request->name,
+                'email' => $request->email
+            ]);
+
             $paymentIntent = PaymentIntent::create([
-                'amount' => $request->amount, // $request->amount = 1000 sẽ là $10.00 USD.
-                'currency' => 'usd',
-                'description' => 'Payment via Laravel Stripe API',
+                'amount' => intval($request->amount),
+                'currency' => 'jpy',
+                'customer' => $customer->id,
                 'payment_method_types' => ['card'],
+                'payment_method' => 'pm_card_visa',
+                'confirm' => true,
             ]);
 
             return response()->json([
+                'status' => true,
                 'message' => 'PaymentIntent created successfully',
-                'clientSecret' => $paymentIntent->client_secret,
+                'client_secret' => $paymentIntent->client_secret,
+                'amount_jpy' => $paymentIntent->amount,
+                'customer' => [
+                    'id' => $customer->id,
+                    'name' => $customer->name,
+                    'email' => $customer->email,
+                ]
             ]);
         } catch (\Exception $e) {
             return response()->json([
-                'error' => $e->getMessage(),
+                'status' => false,
+                'message' => 'Stripe error: ' . $e->getMessage()
             ], 500);
         }
     }
-
 }
